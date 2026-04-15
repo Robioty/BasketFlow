@@ -1,64 +1,58 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BasketFlow v5</title>
-
-<style>
+<title>BasketFlow v6</title><style>
 body { font-family: -apple-system, sans-serif; margin:0; background:#f5f7fa;}
 header { background: linear-gradient(135deg,#0b5ed7,#4dabf7); color:white; padding:18px; text-align:center; font-weight:bold;}
 .container { padding:16px; max-width:600px; margin:auto;}
 textarea { width:100%; height:120px; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:10px;}
 button { width:100%; padding:14px; border:none; border-radius:10px; background:#0b5ed7; color:white; font-size:16px; margin-bottom:10px;}
 .section { margin-top:16px;}
-.item { background:white; padding:14px; margin-bottom:8px; border-radius:12px; display:flex; justify-content:space-between;}
+.item { background:white; padding:14px; margin-bottom:8px; border-radius:12px; display:flex; flex-direction:column; gap:6px;}
 .item.done { opacity:0.5; text-decoration:line-through;}
-.actions button { width:auto; margin-left:6px; font-size:12px; padding:6px;}
+.item-top { display:flex; justify-content:space-between; align-items:center; }
+.actions button { width:auto; margin-left:6px; font-size:12px; padding:6px; }
+.source { font-size:12px; color:#666; }
 .progress { font-weight:bold; margin:10px 0;}
 .habits { background:#fff3cd; padding:10px; border-radius:10px; margin-top:10px;}
-</style>
-</head>
-
-<body>
-
-<header>🛒 BasketFlow</header>
-
-<div class="container">
-
-<textarea id="inputList" placeholder="Paste shopping list..."></textarea>
-
-<button onclick="buildSmart()">✨ Build Smart Shop</button>
+</style></head><body><header>🛒 BasketFlow</header><div class="container"><textarea id="inputList" placeholder="Paste shopping list..."></textarea><button onclick="buildSmart()">✨ Build Smart Shop</button>
 
 <div class="progress" id="progress"></div>
 <div id="list"></div>
-<div class="habits" id="habits"></div>
+<div class="habits" id="habits"></div></div><script>
 
-</div>
-
-<script>
+const ignorePatterns = [
+  /\\d{1,2}[:\\.]\\d{2}/, // times
+  /\\d{1,2}\\s?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
+  /\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}/,
+  /from\\s+\\d/i,
+  /get microsoft/i,
+  /http/i
+];
 
 const typoMap = {
   "chxiken":"chicken",
   "corriander":"coriander",
   "caukuflower":"cauliflower",
   "mangerout":"mangetout",
-  "bing bags":"bin bags"
+  "bing bags":"bin bags",
+  "picksle":"pickle"
 };
 
 const habits = {
   "kefir":"biotiful kefir 500ml",
   "mince":"beef mince 5% fat",
-  "milk":"semi skimmed milk",
+  "milk":"semi skimmed milk"
 };
 
 const usuals = ["milk","bananas","cheese","bread"];
 
 const categories = {
-  "Protein":["chicken","beef","sausages","eggs","mince"],
-  "Fruit & Veg":["carrot","broccoli","pepper","courgette","avocado","spinach","banana"],
+  "Protein":["chicken","beef","sausages","eggs","mince","tuna"],
+  "Fruit & Veg":["carrot","broccoli","pepper","courgette","avocado","spinach","banana","lettuce","tomato"],
   "Dairy":["milk","yoghurt","cheese","kefir"],
-  "Carbs":["pasta","rice","wrap","potato","bread","spaghetti"],
+  "Carbs":["pasta","rice","wrap","potato","bread","spaghetti","bagel"],
   "Pantry":["beans","chickpeas","tomato","coconut","sauce"],
   "Household":["bin","clean","shower","drain"],
   "Snacks":["crisps","snack","bars"]
@@ -66,11 +60,16 @@ const categories = {
 
 let items = [];
 
-function cleanLine(line){
-  let l = line.toLowerCase().trim();
+function isNoise(line) {
+  return ignorePatterns.some(p => p.test(line));
+}
+
+function cleanLine(original){
+  let l = original.toLowerCase().trim();
 
   if(!l) return null;
   if(l.match(/mon|tues|weds|thurs|fri|sat|sun/)) return null;
+  if(isNoise(l)) return null;
 
   for(let key in typoMap){
     l = l.replace(key, typoMap[key]);
@@ -80,10 +79,12 @@ function cleanLine(line){
   if(l.includes("chicken breast x lots")) l = "chicken breast fillets";
 
   for(let key in habits){
-    if(l.includes(key)) return habits[key];
+    if(l.includes(key)) {
+      return { name: habits[key], source: original };
+    }
   }
 
-  return l;
+  return { name: l, source: original };
 }
 
 function detectCategory(item){
@@ -99,14 +100,21 @@ function buildSmart(){
   const raw = document.getElementById("inputList").value.split("\n");
 
   const cleaned = raw.map(cleanLine).filter(Boolean);
-  const unique = [...new Set(cleaned)];
+
+  const uniqueMap = new Map();
+
+  cleaned.forEach(obj => {
+    if(!uniqueMap.has(obj.name)) {
+      uniqueMap.set(obj.name, obj.source);
+    }
+  });
 
   const grouped = {};
 
-  unique.forEach(item=>{
-    const cat = detectCategory(item);
+  uniqueMap.forEach((source, name) => {
+    const cat = detectCategory(name);
     if(!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(item);
+    grouped[cat].push({ name, source });
   });
 
   render(grouped);
@@ -125,18 +133,21 @@ function render(data){
     title.innerText = section;
     sec.appendChild(title);
 
-    data[section].forEach(name=>{
-      items.push({name,done:false});
+    data[section].forEach(obj=>{
+      items.push({name:obj.name,done:false});
 
       const div = document.createElement("div");
       div.className="item";
 
       div.innerHTML = `
-        <span>${name}</span>
-        <div class="actions">
-          <button onclick="search('${name}')">Search</button>
-          <button onclick="toggle(${items.length-1})">✔</button>
+        <div class="item-top">
+          <span>${obj.name}</span>
+          <div class="actions">
+            <button onclick="search('${obj.name}')">Search</button>
+            <button onclick="toggle(${items.length-1})">✔</button>
+          </div>
         </div>
+        <div class="source">From: ${obj.source}</div>
       `;
 
       sec.appendChild(div);
@@ -166,14 +177,11 @@ function search(q){
 
 function checkHabits(){
   const names = items.map(i=>i.name);
-
   const missing = usuals.filter(u=>!names.some(n=>n.includes(u)));
 
   document.getElementById("habits").innerText =
     missing.length ? "💡 You usually buy: " + missing.join(", ") : "";
 }
 
-</script>
-
-</body>
+</script></body>
 </html>
