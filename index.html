@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BasketFlow</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f5f5f5;
+    }
+
+    header {
+      background: #0b5ed7;
+      color: white;
+      padding: 16px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .container {
+      padding: 16px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      padding: 10px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border: none;
+      background: #0b5ed7;
+      color: white;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+
+    button.secondary {
+      background: #6c757d;
+    }
+
+    .item {
+      background: white;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .item.done {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+
+    .actions button {
+      width: auto;
+      margin-left: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .progress {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>🛒 BasketFlow</header>
+
+<div class="container">
+
+  <textarea id="inputList" placeholder="Paste shopping list here..."></textarea>
+
+  <button onclick="generateList()">Build My Shop</button>
+
+  <div class="progress" id="progress"></div>
+
+  <div id="list"></div>
+
+</div>
+
+<script>
+  let items = [];
+
+  function cleanLine(line) {
+    return line
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .trim();
+  }
+
+  function generateList() {
+    const raw = document.getElementById("inputList").value;
+    const lines = raw.split("\n");
+
+    items = [];
+
+    lines.forEach(line => {
+      const cleaned = cleanLine(line);
+      if (cleaned.length > 2) {
+        items.push({ name: cleaned, done: false });
+      }
+    });
+
+    renderList();
+  }
+
+  function renderList() {
+    const container = document.getElementById("list");
+    container.innerHTML = "";
+
+    let doneCount = 0;
+
+    items.forEach((item, index) => {
+      if (item.done) doneCount++;
+
+      const div = document.createElement("div");
+      div.className = "item" + (item.done ? " done" : "");
+
+      div.innerHTML = `
+        <span>${item.name}</span>
+        <div class="actions">
+          <button onclick="openTesco('${item.name}')">Search</button>
+          <button onclick="toggleItem(${index})">✔</button>
+        </div>
+      `;
+
+      container.appendChild(div);
+    });
+
+    document.getElementById("progress").innerText =
+      `🛒 ${doneCount} / ${items.length} added`;
+  }
+
+  function toggleItem(index) {
+    items[index].done = !items[index].done;
+    renderList();
+  }
+
+  function openTesco(query) {
+    const url = `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(query)}`;
+    window.open(url, "_blank");
+  }
+</script>
+
+</body>
+</html>
