@@ -1,160 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BasketFlow</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BasketFlow v3</title>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-    }
-
-    header {
-      background: #0b5ed7;
-      color: white;
-      padding: 16px;
-      text-align: center;
-      font-size: 20px;
-      font-weight: bold;
-    }
-
-    .container {
-      padding: 16px;
-    }
-
-    textarea {
-      width: 100%;
-      height: 120px;
-      padding: 10px;
-      font-size: 14px;
-      margin-bottom: 10px;
-    }
-
-    button {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 10px;
-      border: none;
-      background: #0b5ed7;
-      color: white;
-      font-size: 16px;
-      border-radius: 8px;
-    }
-
-    button.secondary {
-      background: #6c757d;
-    }
-
-    .item {
-      background: white;
-      padding: 12px;
-      margin-bottom: 8px;
-      border-radius: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .item.done {
-      opacity: 0.5;
-      text-decoration: line-through;
-    }
-
-    .actions button {
-      width: auto;
-      margin-left: 6px;
-      padding: 6px 10px;
-      font-size: 12px;
-    }
-
-    .progress {
-      margin: 10px 0;
-      font-weight: bold;
-    }
-  </style>
+<style>
+body { font-family: Arial; margin: 0; background: #f5f5f5; }
+header { background: #0b5ed7; color: white; padding: 16px; text-align: center; font-size: 20px; }
+.container { padding: 16px; }
+textarea { width: 100%; height: 120px; margin-bottom: 10px; }
+button {
+  width: 100%; padding: 12px; margin-bottom: 10px;
+  border: none; background: #0b5ed7; color: white;
+  border-radius: 8px; font-size: 16px;
+}
+.secondary { background: #6c757d; }
+.section { margin-top: 16px; }
+.item {
+  background: white; padding: 12px; margin-bottom: 8px;
+  border-radius: 8px; display: flex; justify-content: space-between;
+}
+.item.done { opacity: 0.5; text-decoration: line-through; }
+.actions button { width: auto; margin-left: 6px; font-size: 12px; padding: 6px; }
+.progress { font-weight: bold; margin: 10px 0; }
+</style>
 </head>
 
 <body>
 
-<header>🛒 BasketFlow</header>
+<header>🛒 BasketFlow v3</header>
 
 <div class="container">
 
-  <textarea id="inputList" placeholder="Paste shopping list here..."></textarea>
+<textarea id="inputList" placeholder="Paste shopping list..."></textarea>
 
-  <button onclick="generateList()">Build My Shop</button>
+<button onclick="smartClean()">⚡ Quick Clean</button>
+<button onclick="copyPrompt()" class="secondary">📋 Copy AI Prompt</button>
+<button onclick="pasteAI()" class="secondary">📥 Paste AI Result</button>
 
-  <div class="progress" id="progress"></div>
-
-  <div id="list"></div>
+<div class="progress" id="progress"></div>
+<div id="list"></div>
 
 </div>
 
 <script>
-  let items = [];
+let items = [];
 
-  function cleanLine(line) {
-    return line
-      .toLowerCase()
-      .replace(/[^\w\s]/g, "")
-      .trim();
+function smartClean() {
+  const raw = document.getElementById("inputList").value;
+  const lines = raw.split("\n");
+
+  const cleaned = [];
+
+  lines.forEach(line => {
+    let l = line.toLowerCase().trim();
+
+    if (!l) return;
+
+    // remove days / noise
+    if (l.match(/weds|mon|tues|thurs|fri|sat|sun/)) return;
+
+    // fix typos
+    l = l.replace("chxiken", "chicken");
+    l = l.replace("corriander", "coriander");
+    l = l.replace("bing bags", "bin bags");
+
+    cleaned.push(l);
+  });
+
+  const unique = [...new Set(cleaned)];
+
+  buildSimpleList(unique);
+}
+
+function copyPrompt() {
+  const text = document.getElementById("inputList").value;
+
+  const prompt = `
+Clean and structure this shopping list.
+
+Rules:
+- Remove meals/dates
+- Fix spelling
+- Deduplicate
+- Convert to Tesco-style items
+- Group into:
+Protein, Fruit & Veg, Dairy, Carbs, Pantry, Household, Snacks
+
+Return JSON only.
+
+List:
+${text}
+`;
+
+  navigator.clipboard.writeText(prompt);
+  alert("Prompt copied — paste into ChatGPT");
+}
+
+function pasteAI() {
+  const json = prompt("Paste AI JSON here:");
+  if (!json) return;
+
+  try {
+    const data = JSON.parse(json);
+    buildStructuredList(data);
+  } catch {
+    alert("Invalid JSON");
   }
+}
 
-  function generateList() {
-    const raw = document.getElementById("inputList").value;
-    const lines = raw.split("\n");
+function buildSimpleList(list) {
+  items = list.map(name => ({ name, done: false }));
+  renderFlat();
+}
 
-    items = [];
+function buildStructuredList(data) {
+  items = [];
+  const container = document.getElementById("list");
+  container.innerHTML = "";
 
-    lines.forEach(line => {
-      const cleaned = cleanLine(line);
-      if (cleaned.length > 2) {
-        items.push({ name: cleaned, done: false });
-      }
-    });
+  Object.keys(data).forEach(section => {
+    if (!data[section].length) return;
 
-    renderList();
-  }
+    const sec = document.createElement("div");
+    sec.className = "section";
 
-  function renderList() {
-    const container = document.getElementById("list");
-    container.innerHTML = "";
+    const title = document.createElement("h3");
+    title.innerText = section;
+    sec.appendChild(title);
 
-    let doneCount = 0;
-
-    items.forEach((item, index) => {
-      if (item.done) doneCount++;
+    data[section].forEach(name => {
+      const item = { name, done: false };
+      items.push(item);
 
       const div = document.createElement("div");
-      div.className = "item" + (item.done ? " done" : "");
+      div.className = "item";
 
       div.innerHTML = `
-        <span>${item.name}</span>
+        <span>${name}</span>
         <div class="actions">
-          <button onclick="openTesco('${item.name}')">Search</button>
-          <button onclick="toggleItem(${index})">✔</button>
+          <button onclick="search('${name}')">Search</button>
+          <button onclick="toggle(${items.length - 1})">✔</button>
         </div>
       `;
 
-      container.appendChild(div);
+      sec.appendChild(div);
     });
 
-    document.getElementById("progress").innerText =
-      `🛒 ${doneCount} / ${items.length} added`;
-  }
+    container.appendChild(sec);
+  });
 
-  function toggleItem(index) {
-    items[index].done = !items[index].done;
-    renderList();
-  }
+  updateProgress();
+}
 
-  function openTesco(query) {
-    const url = `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(query)}`;
-    window.open(url, "_blank");
-  }
+function renderFlat() {
+  const container = document.getElementById("list");
+  container.innerHTML = "";
+
+  items.forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      <span>${item.name}</span>
+      <div class="actions">
+        <button onclick="search('${item.name}')">Search</button>
+        <button onclick="toggle(${i})">✔</button>
+      </div>
+    `;
+
+    container.appendChild(div);
+  });
+
+  updateProgress();
+}
+
+function toggle(i) {
+  items[i].done = !items[i].done;
+  document.querySelectorAll(".item")[i].classList.toggle("done");
+  updateProgress();
+}
+
+function updateProgress() {
+  const done = items.filter(i => i.done).length;
+  document.getElementById("progress").innerText =
+    `🛒 ${done} / ${items.length} added`;
+}
+
+function search(q) {
+  window.open(`https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}`);
+}
 </script>
 
 </body>
