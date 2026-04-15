@@ -1,97 +1,141 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BasketFlow v4</title><style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: #f5f7fa; }
-header { background: linear-gradient(135deg,#0b5ed7,#4dabf7); color: white; padding: 18px; text-align: center; font-size: 20px; font-weight: bold; }
-.container { padding: 16px; max-width: 600px; margin: auto; }
-textarea { width: 100%; height: 120px; padding: 12px; border-radius: 10px; border: 1px solid #ccc; margin-bottom: 12px; }
-button { width: 100%; padding: 14px; margin-bottom: 10px; border: none; border-radius: 10px; font-size: 16px; }
-.primary { background: #0b5ed7; color: white; }
-.secondary { background: #e9ecef; }
-.section { margin-top: 18px; }
-.section h3 { margin-bottom: 8px; }
-.item { background: white; padding: 14px; margin-bottom: 8px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-.item.done { opacity: 0.5; text-decoration: line-through; }
-.actions button { width: auto; margin-left: 6px; font-size: 12px; padding: 6px 10px; }
-.progress { font-weight: bold; margin: 12px 0; }
-.habits { background:#fff3cd; padding:10px; border-radius:10px; margin-top:12px; font-size:14px; }
-</style></head><body><header>🛒 BasketFlow</header><div class="container"><textarea id="inputList" placeholder="Paste shopping list..."></textarea><button class="primary" onclick="copyPrompt()">📋 Copy AI Prompt</button> <button class="secondary" onclick="pasteAI()">📥 Paste AI Result</button>
+<title>BasketFlow v5</title>
+
+<style>
+body { font-family: -apple-system, sans-serif; margin:0; background:#f5f7fa;}
+header { background: linear-gradient(135deg,#0b5ed7,#4dabf7); color:white; padding:18px; text-align:center; font-weight:bold;}
+.container { padding:16px; max-width:600px; margin:auto;}
+textarea { width:100%; height:120px; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:10px;}
+button { width:100%; padding:14px; border:none; border-radius:10px; background:#0b5ed7; color:white; font-size:16px; margin-bottom:10px;}
+.section { margin-top:16px;}
+.item { background:white; padding:14px; margin-bottom:8px; border-radius:12px; display:flex; justify-content:space-between;}
+.item.done { opacity:0.5; text-decoration:line-through;}
+.actions button { width:auto; margin-left:6px; font-size:12px; padding:6px;}
+.progress { font-weight:bold; margin:10px 0;}
+.habits { background:#fff3cd; padding:10px; border-radius:10px; margin-top:10px;}
+</style>
+</head>
+
+<body>
+
+<header>🛒 BasketFlow</header>
+
+<div class="container">
+
+<textarea id="inputList" placeholder="Paste shopping list..."></textarea>
+
+<button onclick="buildSmart()">✨ Build Smart Shop</button>
 
 <div class="progress" id="progress"></div>
-<div id="list"></div><div class="habits" id="habits"></div></div><script>
+<div id="list"></div>
+<div class="habits" id="habits"></div>
+
+</div>
+
+<script>
+
+const typoMap = {
+  "chxiken":"chicken",
+  "corriander":"coriander",
+  "caukuflower":"cauliflower",
+  "mangerout":"mangetout",
+  "bing bags":"bin bags"
+};
+
+const habits = {
+  "kefir":"biotiful kefir 500ml",
+  "mince":"beef mince 5% fat",
+  "milk":"semi skimmed milk",
+};
+
+const usuals = ["milk","bananas","cheese","bread"];
+
+const categories = {
+  "Protein":["chicken","beef","sausages","eggs","mince"],
+  "Fruit & Veg":["carrot","broccoli","pepper","courgette","avocado","spinach","banana"],
+  "Dairy":["milk","yoghurt","cheese","kefir"],
+  "Carbs":["pasta","rice","wrap","potato","bread","spaghetti"],
+  "Pantry":["beans","chickpeas","tomato","coconut","sauce"],
+  "Household":["bin","clean","shower","drain"],
+  "Snacks":["crisps","snack","bars"]
+};
+
 let items = [];
 
-// simple habit memory
-const usuals = [
-  "milk",
-  "bananas",
-  "cheese",
-  "bread"
-];
+function cleanLine(line){
+  let l = line.toLowerCase().trim();
 
-function copyPrompt() {
-  const text = document.getElementById("inputList").value;
+  if(!l) return null;
+  if(l.match(/mon|tues|weds|thurs|fri|sat|sun/)) return null;
 
-  const prompt = `Clean and structure this shopping list.
-
-Rules:
-- Remove meals/dates
-- Fix spelling
-- Deduplicate
-- Convert to Tesco-style items
-- Group into:
-Protein, Fruit & Veg, Dairy, Carbs, Pantry, Household, Snacks
-
-Return JSON only.
-
-List:
-${text}`;
-
-  navigator.clipboard.writeText(prompt);
-  alert("Prompt copied → paste into ChatGPT");
-}
-
-function pasteAI() {
-  const json = prompt("Paste AI JSON here:");
-  if (!json) return;
-
-  try {
-    const data = JSON.parse(json);
-    buildStructuredList(data);
-  } catch {
-    alert("Invalid JSON");
+  for(let key in typoMap){
+    l = l.replace(key, typoMap[key]);
   }
+
+  if(l.includes("mince x lots")) l = "beef mince 1kg";
+  if(l.includes("chicken breast x lots")) l = "chicken breast fillets";
+
+  for(let key in habits){
+    if(l.includes(key)) return habits[key];
+  }
+
+  return l;
 }
 
-function buildStructuredList(data) {
+function detectCategory(item){
+  for(let cat in categories){
+    if(categories[cat].some(k => item.includes(k))){
+      return cat;
+    }
+  }
+  return "Other";
+}
+
+function buildSmart(){
+  const raw = document.getElementById("inputList").value.split("\n");
+
+  const cleaned = raw.map(cleanLine).filter(Boolean);
+  const unique = [...new Set(cleaned)];
+
+  const grouped = {};
+
+  unique.forEach(item=>{
+    const cat = detectCategory(item);
+    if(!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(item);
+  });
+
+  render(grouped);
+}
+
+function render(data){
   items = [];
   const container = document.getElementById("list");
   container.innerHTML = "";
 
-  Object.keys(data).forEach(section => {
-    if (!data[section].length) return;
-
+  Object.keys(data).forEach(section=>{
     const sec = document.createElement("div");
-    sec.className = "section";
+    sec.className="section";
 
     const title = document.createElement("h3");
     title.innerText = section;
     sec.appendChild(title);
 
-    data[section].forEach(name => {
-      const item = { name, done: false };
-      items.push(item);
+    data[section].forEach(name=>{
+      items.push({name,done:false});
 
       const div = document.createElement("div");
-      div.className = "item";
+      div.className="item";
 
       div.innerHTML = `
         <span>${name}</span>
         <div class="actions">
           <button onclick="search('${name}')">Search</button>
-          <button onclick="toggle(${items.length - 1})">✔</button>
+          <button onclick="toggle(${items.length-1})">✔</button>
         </div>
       `;
 
@@ -101,38 +145,35 @@ function buildStructuredList(data) {
     container.appendChild(sec);
   });
 
-  showHabits();
+  checkHabits();
   updateProgress();
 }
 
-function showHabits() {
-  const names = items.map(i => i.name.toLowerCase());
-
-  const missing = usuals.filter(u => !names.some(n => n.includes(u)));
-
-  if (missing.length === 0) {
-    document.getElementById("habits").innerText = "";
-    return;
-  }
-
-  document.getElementById("habits").innerText =
-    "💡 You usually buy: " + missing.join(", ");
-}
-
-function toggle(i) {
+function toggle(i){
   items[i].done = !items[i].done;
   document.querySelectorAll(".item")[i].classList.toggle("done");
   updateProgress();
 }
 
-function updateProgress() {
-  const done = items.filter(i => i.done).length;
-  document.getElementById("progress").innerText =
-    `🛒 ${done} / ${items.length} added`;
+function updateProgress(){
+  const done = items.filter(i=>i.done).length;
+  document.getElementById("progress").innerText = `🛒 ${done} / ${items.length}`;
 }
 
-function search(q) {
+function search(q){
   window.open(`https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}`);
 }
-</script></body>
+
+function checkHabits(){
+  const names = items.map(i=>i.name);
+
+  const missing = usuals.filter(u=>!names.some(n=>n.includes(u)));
+
+  document.getElementById("habits").innerText =
+    missing.length ? "💡 You usually buy: " + missing.join(", ") : "";
+}
+
+</script>
+
+</body>
 </html>
