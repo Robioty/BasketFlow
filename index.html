@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BasketFlow</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -363,114 +362,126 @@ function setStatus(type, text) {
   if (type !== "loading") setTimeout(() => bar.classList.remove("visible"), 3500);
 }
 
-// ─── OCR: IMAGE → TEXT (Tesseract.js) ────────────────────────────────────────
+// ─── OCR: IMAGE → TEXT ───────────────────────────────────────────────────────
 
 async function handleImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  setStatus("loading", "Reading image… this may take a moment");
+  setStatus("loading", "Reading handwritten list…");
+
+  const base64Data = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = () => rej(new Error("Read failed"));
+    r.readAsDataURL(file);
+  });
+
+  const mediaType = file.type || "image/jpeg";
 
   try {
-    const imageURL = URL.createObjectURL(file);
-
-    const result = await Tesseract.recognize(imageURL, "eng", {
-      logger: m => {
-        if (m.status === "recognizing text") {
-          const pct = Math.round(m.progress * 100);
-          setStatus("loading", `Reading image… ${pct}%`);
-        }
-      }
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: base64Data }
+            },
+            {
+              type: "text",
+              text: `This is a handwritten shopping list. Extract every item you can read and return them as a plain text list, one item per line. Include quantities and descriptions where visible. Do not add categories, headers, or any extra text — just the items. Skip any items that are crossed out.`
+            }
+          ]
+        }]
+      })
     });
 
-    URL.revokeObjectURL(imageURL);
+    const data = await response.json();
+    const extracted = data.content?.find(b => b.type === "text")?.text || "";
 
-    // Clean up Tesseract output: remove blank lines and very short noise lines
-    const lines = result.data.text
-      .split("\n")
-      .map(l => l.trim())
-      .filter(l => l.length > 2);
-
-    if (!lines.length) {
-      setStatus("error", "Couldn't read anything — try a clearer photo");
-      event.target.value = "";
+    if (!extracted.trim()) {
+      setStatus("error", "Couldn't read anything from that image.");
       return;
     }
 
-    const extracted = lines.join("\n");
     const textarea = document.getElementById("inputList");
     const existing = textarea.value.trim();
-    textarea.value = existing ? existing + "\n" + extracted : extracted;
+    textarea.value = existing ? existing + "\n" + extracted.trim() : extracted.trim();
 
-    setStatus("success", `${lines.length} lines extracted — review then tap Build List`);
+    setStatus("success", "List extracted — review and tap Build List");
 
   } catch (e) {
     console.error(e);
-    setStatus("error", "OCR failed — try a clearer, well-lit photo");
+    setStatus("error", "OCR failed. Check console for details.");
   }
 
   event.target.value = "";
 }
 
-// ─── BUILD LIST (local only) ──────────────────────────────────────────────────
+// ─── AI STRUCTURING ──────────────────────────────────────────────────────────
 
-function buildWithAI() {
+async function buildWithAI() {
   const raw = document.getElementById("inputList").value.trim();
   if (!raw) return;
 
-  const lines = raw.split("\n");
+  setStatus("loading", "Structuring list…");
 
-  const typoMap = {
-    "chxiken": "chicken", "chiken": "chicken", "chieken": "chicken",
-    "corriander": "coriander", "caukuflower": "cauliflower",
-    "mangerout": "mangetout", "bing bags": "bin bags", "picksle": "pickle",
-    "bacon": "bacon", "bacen": "bacon", "baeon": "bacon",
-    "biscuts": "biscuits", "biscits": "biscuits",
-    "steradents": "steradent", "steradant": "steradent",
-  };
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `You are a shopping list parser. Take the raw shopping list below and return ONLY a JSON array. No preamble, no markdown, no explanation.
 
-  const seen = new Set();
-  const parsed = [];
+Each element: { "name": "clean item name", "qty": "quantity string or empty", "source": "original line" }
 
-  lines.forEach(line => {
-    let l = line.trim();
-    if (!l || l.length < 2) return;
+Rules:
+- Merge duplicates (keep first occurrence)
+- Clean up spelling and formatting
+- qty examples: "1", "2 packs", "4 x 6", "1 x 4 pints"
+- name should be clean and lowercase
+- Skip crossed-out items if marked with strikethrough text
 
-    // Skip lines that look like noise (dates, times, URLs)
-    if (/https?:\/\//.test(l)) return;
-    if (/^\d{1,2}[.:]\d{2}/.test(l)) return;
+Raw list:
+${raw}`
+        }]
+      })
+    });
 
-    const source = l;
-    l = l.toLowerCase();
+    const data = await response.json();
+    const text = data.content?.find(b => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
 
-    // Apply typo corrections
-    for (const [wrong, right] of Object.entries(typoMap)) {
-      l = l.replace(wrong, right);
-    }
+    renderStructured(parsed);
+    setStatus("success", `${parsed.length} items ready`);
 
-    // Extract leading quantity: "2 x 6", "1 x 4 pints", "2 packs", "4", etc.
-    const qtyMatch = l.match(/^(\d+\s*(?:x\s*\d+)?(?:\s*(?:pack|packs|pints?|bottles?|tins?|jars?|boxes?|tubes?))?)\s+(.+)/i);
-    let qty = "";
-    let name = l;
-    if (qtyMatch) {
-      qty = qtyMatch[1].trim();
-      name = qtyMatch[2].trim();
-    }
-
-    // Deduplicate by name
-    if (seen.has(name)) return;
-    seen.add(name);
-
-    parsed.push({ name, qty, source });
-  });
-
-  if (!parsed.length) {
-    setStatus("error", "Nothing to build — paste or scan a list first");
-    return;
+  } catch (e) {
+    console.error("AI structuring failed, falling back to basic parse", e);
+    setStatus("error", "AI structuring failed — using basic mode");
+    buildBasic();
   }
+}
 
+// ─── BASIC FALLBACK ──────────────────────────────────────────────────────────
+
+function buildBasic() {
+  const raw = document.getElementById("inputList").value.split("\n");
+  const parsed = raw
+    .map(l => l.trim())
+    .filter(l => l.length > 1)
+    .map(l => ({ name: l.toLowerCase(), qty: "", source: l }));
   renderStructured(parsed);
-  setStatus("success", `${parsed.length} items ready`);
 }
 
 // ─── CATEGORY DETECTION ──────────────────────────────────────────────────────
