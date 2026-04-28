@@ -1,187 +1,590 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BasketFlow v6</title><style>
-body { font-family: -apple-system, sans-serif; margin:0; background:#f5f7fa;}
-header { background: linear-gradient(135deg,#0b5ed7,#4dabf7); color:white; padding:18px; text-align:center; font-weight:bold;}
-.container { padding:16px; max-width:600px; margin:auto;}
-textarea { width:100%; height:120px; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:10px;}
-button { width:100%; padding:14px; border:none; border-radius:10px; background:#0b5ed7; color:white; font-size:16px; margin-bottom:10px;}
-.section { margin-top:16px;}
-.item { background:white; padding:14px; margin-bottom:8px; border-radius:12px; display:flex; flex-direction:column; gap:6px;}
-.item.done { opacity:0.5; text-decoration:line-through;}
-.item-top { display:flex; justify-content:space-between; align-items:center; }
-.actions button { width:auto; margin-left:6px; font-size:12px; padding:6px; }
-.source { font-size:12px; color:#666; }
-.progress { font-weight:bold; margin:10px 0;}
-.habits { background:#fff3cd; padding:10px; border-radius:10px; margin-top:10px;}
-</style></head><body><header>🛒 BasketFlow</header><div class="container"><textarea id="inputList" placeholder="Paste shopping list..."></textarea><button onclick="buildSmart()">✨ Build Smart Shop</button>
+<title>BasketFlow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
-<div class="progress" id="progress"></div>
-<div id="list"></div>
-<div class="habits" id="habits"></div></div><script>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222535;
+    --border: #2e3247;
+    --accent: #4f9cf9;
+    --accent2: #7c5cfc;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --radius: 12px;
+  }
 
-const ignorePatterns = [
-  /\\d{1,2}[:\\.]\\d{2}/, // times
-  /\\d{1,2}\\s?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
-  /\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}/,
-  /from\\s+\\d/i,
-  /get microsoft/i,
-  /http/i
-];
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-const typoMap = {
-  "chxiken":"chicken",
-  "corriander":"coriander",
-  "caukuflower":"cauliflower",
-  "mangerout":"mangetout",
-  "bing bags":"bin bags",
-  "picksle":"pickle"
-};
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
 
-const habits = {
-  "kefir":"biotiful kefir 500ml",
-  "mince":"beef mince 5% fat",
-  "milk":"semi skimmed milk"
-};
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
 
-const usuals = ["milk","bananas","cheese","bread"];
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.3rem;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .progress-pill {
+    margin-left: auto;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .progress-pill.active { color: var(--green); border-color: var(--green); }
+
+  .container { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  /* INPUT SECTION */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .input-card label {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  textarea {
+    width: 100%;
+    height: 110px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 13px 10px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  .btn-ocr {
+    background: var(--surface2);
+    color: var(--amber);
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+    padding: 13px 16px;
+  }
+
+  .btn-ocr:hover { border-color: var(--amber); }
+
+  #imageInput { display: none; }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-bar.visible { display: flex; }
+  .status-bar.loading { color: var(--accent); border-color: var(--accent); }
+  .status-bar.error { color: #f87171; border-color: #f87171; }
+  .status-bar.success { color: var(--green); border-color: var(--green); }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(79,156,249,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* HABITS */
+  .habits-bar {
+    background: var(--surface);
+    border: 1px solid var(--amber);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--amber);
+    margin-bottom: 12px;
+    display: none;
+  }
+
+  .habits-bar.visible { display: block; }
+
+  /* SECTIONS */
+  .section {
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 10px 14px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    background: var(--surface2);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .section-count {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+  }
+
+  /* ITEMS */
+  .item {
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+
+  .item:first-of-type { border-top: none; }
+
+  .item.done { opacity: 0.35; }
+
+  .item-check {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+  }
+
+  .item-check:hover { border-color: var(--green); }
+  .item.done .item-check { background: var(--green); border-color: var(--green); }
+  .item.done .item-check::after { content: '✓'; color: white; font-size: 12px; }
+
+  .item-info { flex: 1; min-width: 0; }
+
+  .item-name {
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item.done .item-name { text-decoration: line-through; }
+
+  .item-source {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-search {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .item-search:hover { background: var(--accent); color: white; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.3rem">🛒</span>
+  <h1>BasketFlow</h1>
+  <div class="progress-pill" id="progress" style="display:none"></div>
+</header>
+
+<div class="container">
+
+  <div class="input-card">
+    <label>Shopping List</label>
+    <textarea id="inputList" placeholder="Paste your list here, or use the camera button to scan a handwritten list…"></textarea>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="buildWithAI()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+        Build List
+      </button>
+      <button class="btn btn-ocr" onclick="document.getElementById('imageInput').click()" title="Scan handwritten list">
+        📷 Scan
+      </button>
+    </div>
+    <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="spinner" id="spinner"></div>
+    <span id="statusText"></span>
+  </div>
+
+  <div class="habits-bar" id="habitsBar"></div>
+
+  <div id="list"></div>
+
+</div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+
+const usuals = ["milk", "bread"];
 
 const categories = {
-  "Protein":["chicken","beef","sausages","eggs","mince","tuna"],
-  "Fruit & Veg":["carrot","broccoli","pepper","courgette","avocado","spinach","banana","lettuce","tomato"],
-  "Dairy":["milk","yoghurt","cheese","kefir"],
-  "Carbs":["pasta","rice","wrap","potato","bread","spaghetti","bagel"],
-  "Pantry":["beans","chickpeas","tomato","coconut","sauce"],
-  "Household":["bin","clean","shower","drain"],
-  "Snacks":["crisps","snack","bars"]
+  "Protein":    ["chicken","beef","sausage","sausages","eggs","mince","tuna","bacon","pork","ham","fish"],
+  "Fruit & Veg":["carrot","broccoli","pepper","courgette","avocado","spinach","banana","apple","apples","orange","oranges","lettuce","tomato","onion","potato"],
+  "Dairy":      ["milk","yoghurt","cheese","kefir","butter","cream"],
+  "Bread & Carbs":["pasta","rice","wrap","bread","loaf","spaghetti","bagel","roll","rolls","scone","scones"],
+  "Pantry":     ["jam","sauce","spread","oil","beans","vinegar","pickle","ketchup"],
+  "Household":  ["washing","washing up","bin","clean","shower","drain","kitchen roll","lenor","liquid"],
+  "Snacks":     ["crisp","crisps","biscuit","biscuits","snack","bar","kit kat","kitkat","ginger nut"],
+  "Drinks":     ["drink","drinks","tonic","water","juice","coffee","tea","teabag","teabags","kefir"],
+  "Pharmacy":   ["steradent","gel","paracetamol","ibuprofen"],
 };
 
 let items = [];
 
-function isNoise(line) {
-  return ignorePatterns.some(p => p.test(line));
+// ─── STATUS ──────────────────────────────────────────────────────────────────
+
+function setStatus(type, text) {
+  const bar = document.getElementById("statusBar");
+  const spinner = document.getElementById("spinner");
+  const statusText = document.getElementById("statusText");
+  bar.className = "status-bar visible " + type;
+  spinner.style.display = type === "loading" ? "block" : "none";
+  statusText.textContent = text;
+  if (type !== "loading") setTimeout(() => bar.classList.remove("visible"), 3500);
 }
 
-function cleanLine(original){
-  let l = original.toLowerCase().trim();
+// ─── OCR: IMAGE → TEXT ───────────────────────────────────────────────────────
 
-  if(!l) return null;
-  if(l.match(/mon|tues|weds|thurs|fri|sat|sun/)) return null;
-  if(isNoise(l)) return null;
+async function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
 
-  for(let key in typoMap){
-    l = l.replace(key, typoMap[key]);
-  }
+  setStatus("loading", "Reading handwritten list…");
 
-  if(l.includes("mince x lots")) l = "beef mince 1kg";
-  if(l.includes("chicken breast x lots")) l = "chicken breast fillets";
+  const base64Data = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = () => rej(new Error("Read failed"));
+    r.readAsDataURL(file);
+  });
 
-  for(let key in habits){
-    if(l.includes(key)) {
-      return { name: habits[key], source: original };
+  const mediaType = file.type || "image/jpeg";
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: base64Data }
+            },
+            {
+              type: "text",
+              text: `This is a handwritten shopping list. Extract every item you can read and return them as a plain text list, one item per line. Include quantities and descriptions where visible. Do not add categories, headers, or any extra text — just the items. Skip any items that are crossed out.`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const extracted = data.content?.find(b => b.type === "text")?.text || "";
+
+    if (!extracted.trim()) {
+      setStatus("error", "Couldn't read anything from that image.");
+      return;
     }
+
+    const textarea = document.getElementById("inputList");
+    const existing = textarea.value.trim();
+    textarea.value = existing ? existing + "\n" + extracted.trim() : extracted.trim();
+
+    setStatus("success", "List extracted — review and tap Build List");
+
+  } catch (e) {
+    console.error(e);
+    setStatus("error", "OCR failed. Check console for details.");
   }
 
-  return { name: l, source: original };
+  event.target.value = "";
 }
 
-function detectCategory(item){
-  for(let cat in categories){
-    if(categories[cat].some(k => item.includes(k))){
-      return cat;
-    }
+// ─── AI STRUCTURING ──────────────────────────────────────────────────────────
+
+async function buildWithAI() {
+  const raw = document.getElementById("inputList").value.trim();
+  if (!raw) return;
+
+  setStatus("loading", "Structuring list…");
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `You are a shopping list parser. Take the raw shopping list below and return ONLY a JSON array. No preamble, no markdown, no explanation.
+
+Each element: { "name": "clean item name", "qty": "quantity string or empty", "source": "original line" }
+
+Rules:
+- Merge duplicates (keep first occurrence)
+- Clean up spelling and formatting
+- qty examples: "1", "2 packs", "4 x 6", "1 x 4 pints"
+- name should be clean and lowercase
+- Skip crossed-out items if marked with strikethrough text
+
+Raw list:
+${raw}`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.find(b => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+
+    renderStructured(parsed);
+    setStatus("success", `${parsed.length} items ready`);
+
+  } catch (e) {
+    console.error("AI structuring failed, falling back to basic parse", e);
+    setStatus("error", "AI structuring failed — using basic mode");
+    buildBasic();
+  }
+}
+
+// ─── BASIC FALLBACK ──────────────────────────────────────────────────────────
+
+function buildBasic() {
+  const raw = document.getElementById("inputList").value.split("\n");
+  const parsed = raw
+    .map(l => l.trim())
+    .filter(l => l.length > 1)
+    .map(l => ({ name: l.toLowerCase(), qty: "", source: l }));
+  renderStructured(parsed);
+}
+
+// ─── CATEGORY DETECTION ──────────────────────────────────────────────────────
+
+function detectCategory(name) {
+  const n = name.toLowerCase();
+  for (const [cat, keywords] of Object.entries(categories)) {
+    if (keywords.some(k => n.includes(k))) return cat;
   }
   return "Other";
 }
 
-function buildSmart(){
-  const raw = document.getElementById("inputList").value.split("\n");
+// ─── RENDER ──────────────────────────────────────────────────────────────────
 
-  const cleaned = raw.map(cleanLine).filter(Boolean);
-
-  const uniqueMap = new Map();
-
-  cleaned.forEach(obj => {
-    if(!uniqueMap.has(obj.name)) {
-      uniqueMap.set(obj.name, obj.source);
-    }
-  });
+function renderStructured(parsed) {
+  items = [];
 
   const grouped = {};
+  const seen = new Set();
 
-  uniqueMap.forEach((source, name) => {
-    const cat = detectCategory(name);
-    if(!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push({ name, source });
+  parsed.forEach(obj => {
+    const key = obj.name.toLowerCase().trim();
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const cat = detectCategory(obj.name);
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(obj);
+    items.push({ name: obj.name, done: false });
   });
 
-  render(grouped);
-}
+  const catOrder = ["Protein", "Fruit & Veg", "Dairy", "Bread & Carbs", "Pantry", "Household", "Snacks", "Drinks", "Pharmacy", "Other"];
+  const orderedKeys = catOrder.filter(c => grouped[c]).concat(Object.keys(grouped).filter(c => !catOrder.includes(c)));
 
-function render(data){
-  items = [];
   const container = document.getElementById("list");
   container.innerHTML = "";
 
-  Object.keys(data).forEach(section=>{
+  orderedKeys.forEach(section => {
+    const grp = grouped[section];
     const sec = document.createElement("div");
-    sec.className="section";
+    sec.className = "section";
 
-    const title = document.createElement("h3");
-    title.innerText = section;
-    sec.appendChild(title);
+    sec.innerHTML = `<div class="section-header"><span>${section}</span><span class="section-count">${grp.length}</span></div>`;
 
-    data[section].forEach(obj=>{
-      items.push({name:obj.name,done:false});
+    grp.forEach((obj, _) => {
+      const idx = items.findIndex(i => i.name === obj.name);
+      const display = obj.qty ? `<strong>${obj.qty}</strong> ${obj.name}` : obj.name;
 
       const div = document.createElement("div");
-      div.className="item";
-
+      div.className = "item";
+      div.id = `item-${idx}`;
       div.innerHTML = `
-        <div class="item-top">
-          <span>${obj.name}</span>
-          <div class="actions">
-            <button onclick="search('${obj.name}')">Search</button>
-            <button onclick="toggle(${items.length-1})">✔</button>
-          </div>
+        <button class="item-check" onclick="toggle(${idx})"></button>
+        <div class="item-info">
+          <div class="item-name">${display}</div>
+          ${obj.source && obj.source.toLowerCase() !== obj.name.toLowerCase() ? `<div class="item-source">${obj.source}</div>` : ''}
         </div>
-        <div class="source">From: ${obj.source}</div>
+        <button class="item-search" onclick="searchTesco('${obj.name.replace(/'/g, "\\'")}')">Tesco</button>
       `;
-
       sec.appendChild(div);
     });
 
     container.appendChild(sec);
   });
 
+  const prog = document.getElementById("progress");
+  prog.style.display = "block";
   checkHabits();
   updateProgress();
 }
 
-function toggle(i){
+// ─── ACTIONS ─────────────────────────────────────────────────────────────────
+
+function toggle(i) {
   items[i].done = !items[i].done;
-  document.querySelectorAll(".item")[i].classList.toggle("done");
+  const el = document.getElementById(`item-${i}`);
+  if (el) el.classList.toggle("done", items[i].done);
   updateProgress();
 }
 
-function updateProgress(){
-  const done = items.filter(i=>i.done).length;
-  document.getElementById("progress").innerText = `🛒 ${done} / ${items.length}`;
+function updateProgress() {
+  const done = items.filter(i => i.done).length;
+  const total = items.length;
+  const prog = document.getElementById("progress");
+  prog.textContent = `${done} / ${total}`;
+  prog.className = "progress-pill" + (done === total && total > 0 ? " active" : "");
 }
 
-function search(q){
+function searchTesco(q) {
   window.open(`https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}`);
 }
 
-function checkHabits(){
-  const names = items.map(i=>i.name);
-  const missing = usuals.filter(u=>!names.some(n=>n.includes(u)));
-
-  document.getElementById("habits").innerText =
-    missing.length ? "💡 You usually buy: " + missing.join(", ") : "";
+function checkHabits() {
+  const names = items.map(i => i.name.toLowerCase());
+  const missing = usuals.filter(u => !names.some(n => n.includes(u)));
+  const bar = document.getElementById("habitsBar");
+  if (missing.length) {
+    bar.textContent = "💡 You usually buy: " + missing.join(", ");
+    bar.classList.add("visible");
+  } else {
+    bar.classList.remove("visible");
+  }
 }
-
-</script></body>
+</script>
+</body>
 </html>
