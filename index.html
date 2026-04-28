@@ -381,23 +381,8 @@
   <h1>BasketFlow</h1>
   <div class="header-right">
     <div class="progress-pill" id="progress" style="display:none"></div>
-    <button class="btn-settings" onclick="openSettings()" title="Settings">⚙️</button>
   </div>
 </header>
-
-<!-- SETTINGS PANEL -->
-<div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsOnBg(event)">
-  <div class="settings-sheet">
-    <h2>⚙️ Settings</h2>
-    <label>Google Cloud Vision API Key</label>
-    <input type="text" id="apiKeyInput" placeholder="Paste your API key here…" autocomplete="off" autocorrect="off" spellcheck="false">
-    <p class="settings-hint">
-      Used only for scanning handwritten lists. Your key is saved on this device only and never sent anywhere except Google Vision.<br><br>
-      <a href="https://console.cloud.google.com" target="_blank">Get a free key at console.cloud.google.com</a> — enable Cloud Vision API, then create an API key under Credentials.
-    </p>
-    <button class="btn btn-primary" onclick="saveSettings()">Save</button>
-  </div>
-</div>
 
 <div class="container">
 
@@ -410,11 +395,10 @@
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
         Build List
       </button>
-      <button class="btn btn-ocr" onclick="document.getElementById('imageInput').click()" title="Scan handwritten list">
-        📷 Scan
+      <button class="btn btn-ocr" onclick="pasteFromClipboard()" title="Paste from clipboard">
+        📋 Paste
       </button>
     </div>
-    <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
   </div>
 
   <div class="status-bar" id="statusBar">
@@ -459,101 +443,24 @@ function setStatus(type, text) {
   if (type !== "loading") setTimeout(() => bar.classList.remove("visible"), 3500);
 }
 
-// ─── SETTINGS ────────────────────────────────────────────────────────────────
+// ─── CLIPBOARD PASTE ─────────────────────────────────────────────────────────
 
-function openSettings() {
-  const key = localStorage.getItem("gvision_key") || "";
-  document.getElementById("apiKeyInput").value = key;
-  document.getElementById("settingsOverlay").classList.add("open");
-}
-
-function closeSettingsOnBg(e) {
-  if (e.target === document.getElementById("settingsOverlay")) {
-    document.getElementById("settingsOverlay").classList.remove("open");
-  }
-}
-
-function saveSettings() {
-  const key = document.getElementById("apiKeyInput").value.trim();
-  if (key) localStorage.setItem("gvision_key", key);
-  else localStorage.removeItem("gvision_key");
-  document.getElementById("settingsOverlay").classList.remove("open");
-  setStatus("success", "Settings saved");
-}
-
-// ─── OCR: IMAGE → TEXT (Google Vision) ───────────────────────────────────────
-
-async function handleImageUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const apiKey = localStorage.getItem("gvision_key");
-  if (!apiKey) {
-    setStatus("error", "Add your Google API key in Settings first ⚙️");
-    event.target.value = "";
-    return;
-  }
-
-  setStatus("loading", "Reading handwritten list…");
-
+async function pasteFromClipboard() {
   try {
-    // Convert image to base64
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result.split(",")[1]);
-      r.onerror = () => rej(new Error("Read failed"));
-      r.readAsDataURL(file);
-    });
-
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requests: [{
-            image: { content: base64 },
-            features: [{ type: "DOCUMENT_TEXT_DETECTION" }]
-          }]
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.error) {
-      setStatus("error", "API error: " + data.error.message);
-      event.target.value = "";
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) {
+      setStatus("error", "Clipboard is empty — copy text from Google Lens first");
       return;
     }
-
-    const fullText = data.responses?.[0]?.fullTextAnnotation?.text || "";
-
-    if (!fullText.trim()) {
-      setStatus("error", "Couldn't read anything — try a clearer photo");
-      event.target.value = "";
-      return;
-    }
-
-    // Clean up: trim lines, drop very short noise lines
-    const lines = fullText
-      .split("\n")
-      .map(l => l.trim())
-      .filter(l => l.length > 2);
-
-    const extracted = lines.join("\n");
     const textarea = document.getElementById("inputList");
     const existing = textarea.value.trim();
-    textarea.value = existing ? existing + "\n" + extracted : extracted;
-
-    setStatus("success", `${lines.length} lines extracted — review then tap Build List`);
-
+    textarea.value = existing ? existing + "\n" + text.trim() : text.trim();
+    setStatus("success", "Pasted — review then tap Build List");
   } catch (e) {
-    console.error(e);
-    setStatus("error", "OCR failed — check your API key in Settings ⚙️");
+    // Fallback: focus the textarea so the user can long-press paste manually
+    document.getElementById("inputList").focus();
+    setStatus("error", "Tap and hold the text box, then choose Paste");
   }
-
-  event.target.value = "";
 }
 
 // ─── BUILD LIST (local only) ──────────────────────────────────────────────────
